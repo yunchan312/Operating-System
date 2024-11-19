@@ -131,7 +131,7 @@ start_process (void *file_name_)
     /*stack*/
     construct_esp(file_name, &if_.esp);
   }
-
+  hex_dump(if_.esp , if_.esp , PHYS_BASE - if_.esp ,true);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 

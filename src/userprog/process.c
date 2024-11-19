@@ -45,6 +45,70 @@ process_execute (const char *file_name)
   return tid;
 }
 
+
+/*--------------------------------------kychann added-------------------------------------------*/
+/*Parse filename function*/
+void construct_esp(char *file_name, void **esp) {
+  char ** argv;
+  int argc;
+  int total_len;
+  char stored_file_name[256];
+  char *token;
+  char *last;
+  int i;
+  int len;
+
+  strlcpy(stored_file_name, file_name, strlen(file_name) + 1);
+  token = strtok_r(stored_file_name, " ", &last);
+  argc = 0;
+  while(token != NULL) {
+    argc += 1;
+    token = strtok_r(NULL, " ", &last);
+  }
+  argv = (char **)malloc(sizeof(char *) * argc);
+
+  strlcpy(stored_file_name, file_name, strlen(file_name) + 1);
+  for (i=0, token = strtok_r(stored_file_name, " ", &last); i<argc; i++, token = strtok_r(NULL, " ", &last)){
+    len = strlen(token);
+    argv[i] = token;
+  }
+
+  total_len = 0;
+  for (i=argc - 1; 0<=1; i -- ){
+    len = strlen(argv[i]);
+    *esp -= len + 1;
+    total_len += len + 1;
+    strlcpy(*esp, argv[i], len + 1);
+    argv[i] = *esp;
+  }
+
+  *esp -= total_len %4 != 0 ? 4 - (total_len % 4) : 0;
+  *esp -= 4;
+  **(uint32_t **)esp = 0;
+
+  for(i=argc - 1; 0<= i; i--){
+    *esp -= 4;
+    **(uint32_t **)esp = argv[i];
+  }
+  *esp -= 4;
+  **(uint32_t **)esp = *esp + 4;
+
+  *esp -= 4;
+  **(uint32_t **)esp = argc;
+
+  *esp -= 4;
+  **(uint32_t **)esp = 0;
+
+  free(argv);
+}
+
+void parse_filename(char *src, char *dest){
+  int i;
+  strlcpy(dest, src, strlen(src) + 1);
+  for (i=0; dest[i]!='\0' && dest[i] !=' '; i++);
+  dest[i] = '\0';
+}
+
 /* A thread function that loads a user process and starts it
    running. */
 static void
@@ -53,6 +117,8 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  char cmd_name[256]; // kychann added
+  parse_filename(file_name, cmd_name); // kychann added
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -60,6 +126,11 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  /*kychann added*/
+  if(success){
+    /*stack*/
+    construct_esp(file_name, &if_.esp);
+  }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -75,7 +146,7 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
-
+/*---------------------------kychann added-------------------------------------*/
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -86,8 +157,10 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
+  int i;
+  for(i=0; i<10000000000;i++);
   return -1;
 }
 
@@ -358,7 +431,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
      it then user code that passed a null pointer to system calls
      could quite likely panic the kernel by way of null pointer
      assertions in memcpy(), etc. */
-  if (phdr->p_vaddr < PGSIZE)
+  if (phdr->p_offset < PGSIZE) // kychann added
     return false;
 
   /* It's okay. */
